@@ -14,6 +14,8 @@ pub struct NameRecordHeader{
     //define the data type
     //ipfs cid?   
     pub ipfs: Option<[u8; 46]>,
+    //root domain pubkey
+    pub root: Pubkey,
 }
 //Prevent external code from implementing certain traits for NameRecordHeader
 impl Sealed for NameRecordHeader {}
@@ -41,7 +43,8 @@ impl Pack for NameRecordHeader {
 
 
 pub mod fun{
-    use anchor_lang::prelude::*;
+    use anchor_lang::{prelude::*, solana_program::entrypoint::ProgramResult};
+    use crate::web3_data;
 
     //usage: calculate the PDA
     //program_id: the id of current program
@@ -67,5 +70,29 @@ pub mod fun{
     
         (name_account_key, seeds_vec)
     }
+
+    pub fn write_data(write_account: &AccountInfo, input: &web3_data) -> bool{
+        let mut account_data = write_account.data.borrow_mut();
+        //Serialize
+        if let Ok(serialized_data) = input.try_to_vec()  {
+            if serialized_data.len() <= account_data.len() {
+                account_data[..serialized_data.len()].copy_from_slice(&serialized_data);
+            } else {
+                #[cfg(feature = "Debug")]
+                msg!("Serialized data exceeds account storage size.");
+                return false;
+            }
+        } else {
+            #[cfg(feature = "Debug")]
+            msg!("Failed to serialize data.");
+            return false;
+        }
+        return true;
+    }
+
+        
+
 }
+
+
 

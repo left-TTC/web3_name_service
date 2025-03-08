@@ -4,8 +4,14 @@ use crate::{create_name_service, update_name_service,
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 
 pub mod create;
+pub mod delete;
+pub mod update;
+pub mod transfer;
 
-use create::{create_root_domain};
+use create::create;
+use update::update;
+use transfer::transfer;
+use delete::delete;
 
 pub struct Processor{}
 
@@ -13,29 +19,25 @@ impl Processor {
     pub fn create_name_process(ctx: Context<create_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start create a domian name");
-        
-        create_root_domain(ctx)
+        create(ctx)
     }
-
 
     pub fn update_name_process(ctx: Context<update_name_service>) -> ProgramResult{
-
-
-        Ok(())
+        #[cfg(feature = "Debug")]
+        msg!("start update domain data");
+        update(ctx)
     }
-
 
     pub fn transfer_name_process(ctx: Context<transfer_name_service>) -> ProgramResult{
-
-
-        Ok(())
+        #[cfg(feature = "Debug")]
+        msg!("start transfer domain data");
+        transfer(ctx)
     }
 
-
     pub fn delete_name_process(ctx: Context<delete_name_service>) -> ProgramResult{
-
-
-        Ok(())
+        #[cfg(feature = "Debug")]
+        msg!("start delete domain data");
+        delete(ctx)
     }
 }
 

@@ -12,7 +12,7 @@ use anchor_lang::solana_program::system_instruction;
 @Function: create_root_domain
 @description: this function used to create a root domain     
 */
-pub fn create_root_domain(ctx: Context<create_name_service>) -> ProgramResult {
+pub fn create(ctx: Context<create_name_service>) -> ProgramResult {
     //confirm the name_accounts_key
     let program_id = ctx.program_id;
     let hashed_name = ctx.accounts.base_data.hashed_name.clone();
@@ -48,6 +48,9 @@ pub fn create_root_domain(ctx: Context<create_name_service>) -> ProgramResult {
     }
     //No additional types are considered for now
 
+    //create a mut root: used to construct NameRecordHeader 
+    let mut root:Pubkey = Pubkey::default();
+
     //The root domain does not require a root domain verify
     //if register contract does't convert the root domain
     //We think that creating a common domain name
@@ -67,9 +70,13 @@ pub fn create_root_domain(ctx: Context<create_name_service>) -> ProgramResult {
                 return Err(ProgramError::InvalidArgument);
             }
         }
+        //common accout: use root account;s key
+        root = root_domain.key.clone();
     }else {
         #[cfg(feature = "Debug")]
         msg!("this is a root domain");
+        //rppt domain: use self
+        root = ctx.accounts.name_account.key.clone();
     }
     //ensure there is a domain owner
     if &ctx.accounts.name_owner.pubkey == &Pubkey::default() {
@@ -107,7 +114,35 @@ pub fn create_root_domain(ctx: Context<create_name_service>) -> ProgramResult {
         )?;
     }
 
-
+    //Data writing does not require explicit calls to code that interacts with the chain
+    //In Solana, account data modification is implicit, and the program only needs to modify the data field directly.
+    //trasfer ipfs data to u8
+    let ipfs_data = if let Some(init_data_account) = &ctx.accounts.init_data {
+        if let Some(ipfs_vec) = &init_data_account.ipfs {
+            if ipfs_vec.len() != 46 {
+                #[cfg(feature = "Debug")]
+                msg!("IPFS CID must be 46 bytes long"); 
+                return Err(ProgramError::InvalidArgument);
+            }
+    
+            let mut ipfs_array = [0u8; 46];
+            ipfs_array.copy_from_slice(ipfs_vec);
+            Some(ipfs_array)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    //Construct a NameRecordHeader structure
+    let will_record_data = NameRecordHeader {
+        owner: ctx.accounts.name_owner.pubkey,
+        ipfs: ipfs_data,
+        root: root,
+    };
+    //Implicit Write in
+    will_record_data.pack_into_slice(&mut ctx.accounts.name_account.data.borrow_mut());
 
     Ok(())
 }

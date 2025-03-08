@@ -47,33 +47,40 @@ pub struct create_name_service<'info>{
     //parent domain: have -- common domain,  no -- create root domain
     root_domain_opt: Option<Signer<'info>>,
     //the data i want add, the ipfs data and other data
-    init_data: Option<Account<'info, data>>
+    init_data: Option<Account<'info, web3_data>>
 }
 
 #[derive(Accounts)]
 //use to update storaged info
 pub struct update_name_service<'info> {
+    //The domain name account to be modified
     name_account: UncheckedAccount<'info>,
+    //updater
     name_update_signer: Signer<'info>,
-    name_parent: Option<Account<'info, only_pub>>,
-    update_data: Account<'info, data>,
+    //the data need to be updated
+    update_data: Account<'info, web3_data>,
+    //root domain accout
+    root_domain: Signer<'info>,
 }
 
 #[derive(Accounts)]
 //use to transfer domain
 pub struct transfer_name_service<'info> {
+    //new owner
     new_owner: Account<'info, only_pub>,
+    //name account
     name_account: UncheckedAccount<'info>,
-    name_owner_key: Signer<'info>,
-    name_class_opt: Option<Account<'info, only_pub>,>,
+    //The account that requested the transfer transaction
+    submit_account: Signer<'info>,
 }
 
 #[derive(Accounts)]
 //refund and logout
 pub struct  delete_name_service<'info> {
     name_account: UncheckedAccount<'info>,
-    name_owner_key: Signer<'info>,
-    refund_target: Account<'info, only_pub>,
+    //The account that requested the delete transaction
+    submit_account: Signer<'info>,
+    refund_target: UncheckedAccount<'info>,
 }
 
 #[account]
@@ -82,9 +89,8 @@ pub struct only_pub{
 }
 
 #[account]
-pub struct data{
+pub struct web3_data{
     pub ipfs: Option<Vec<u8>>,
-    pub data: Option<Vec<u8>>,
 }
 
 #[account]
