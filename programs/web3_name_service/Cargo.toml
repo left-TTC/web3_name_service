@@ -20,4 +20,5 @@ Debug = []
 
 [dependencies]
 anchor-lang = "0.30.1"
+borsh = "1.5.5"
 

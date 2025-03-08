@@ -5,7 +5,7 @@ use anchor_lang::solana_program::entrypoint::ProgramResult;
 
 pub mod create;
 
-use create::{create_root_domain, create_common_domain};
+use create::{create_root_domain};
 
 pub struct Processor{}
 
@@ -13,14 +13,8 @@ impl Processor {
     pub fn create_name_process(ctx: Context<create_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start create a domian name");
-    
-        //fristly, comfirm the name is right
-        if let Some(name_parent) = ctx.accounts.name_parent_owner_opt.as_ref(){
-            create_root_domain(ctx)
-        }else {
-            create_common_domain(ctx)
-        }
-    
+        
+        create_root_domain(ctx)
     }
 
 

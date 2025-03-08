@@ -1,23 +1,71 @@
-use anchor_lang::prelude::*;
+use borsh::{BorshDeserialize, BorshSerialize};
+use anchor_lang::solana_program::program_error::ProgramError;
+use anchor_lang::solana_program::program_pack::{Pack, Sealed};
+use anchor_lang::solana_program::pubkey::Pubkey;
+use anchor_lang::solana_program::msg;
 
 
-pub fn calculate_PDA(
-    program_id: &Pubkey,
-    hashed_name: Vec<u8>,
-    name_class_opt: &Option<Pubkey>,
-) -> (Pubkey, Vec<u8>) {
-    //hashed name as the init seeds
-    let mut seeds_vec: Vec<u8> = hashed_name;
-    //root domain
-    let name_class = name_class_opt.clone().unwrap_or_default();
-    //add parent
-    for b in name_class.to_bytes() {
-        seeds_vec.push(b);
+
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
+pub struct NameRecordHeader{
+    //owner of this name
+    pub owner: Pubkey,
+    //define the data type
+    //ipfs cid?   
+    pub ipfs: Option<[u8; 46]>,
+}
+//Prevent external code from implementing certain traits for NameRecordHeader
+impl Sealed for NameRecordHeader {}
+
+//Serialize and deserialize structures into byte arrays
+impl Pack for NameRecordHeader {
+    //pubkey:32 ipfs:
+    const LEN: usize = 79;
+
+    fn pack_into_slice(&self, dst: &mut [u8]) {
+        let mut slice = dst;
+        self.serialize(&mut slice).unwrap()
     }
 
-    let (name_account_key, bump) =
-        Pubkey::find_program_address(&seeds_vec.chunks(32).collect::<Vec<&[u8]>>(), program_id);
-    seeds_vec.push(bump);
-
-    (name_account_key, seeds_vec)
+    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
+        let mut p = src;
+        NameRecordHeader::deserialize(&mut p).map_err(|_| {
+            msg!("Failed to deserialize name record");
+            ProgramError::InvalidAccountData
+        })
+    }
 }
+
+
+
+
+pub mod fun{
+    use anchor_lang::prelude::*;
+
+    //usage: calculate the PDA
+    //program_id: the id of current program
+    //hashed_name: off-chain, the hased value of domain
+    //
+    pub fn get_seeds_and_key(
+        program_id: &Pubkey,
+        hashed_name: Vec<u8>,
+        root_opt: &Option<Pubkey>,
+    ) -> (Pubkey, Vec<u8>) {
+        //hashed name as the init seeds
+        let mut seeds_vec: Vec<u8> = hashed_name;
+        //root domain(when create a root domian,use default)
+        let root_domian = root_opt.clone().unwrap_or_default();
+        //add root to the sed
+        for b in root_domian.to_bytes() {
+            seeds_vec.push(b);
+        }
+    
+        let (name_account_key, bump) =
+            Pubkey::find_program_address(&seeds_vec.chunks(32).collect::<Vec<&[u8]>>(), program_id);
+        seeds_vec.push(bump);
+    
+        (name_account_key, seeds_vec)
+    }
+}
+

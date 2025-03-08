@@ -33,13 +33,20 @@ pub mod web3_name_service {
 //this accounts info used to create root or domain
 //Hierarchical domain names are not considered for now
 pub struct create_name_service<'info>{
+    //the domain account that will be created
     name_account: UncheckedAccount<'info>,
-    payer_key: Signer<'info>,
+    //the solana program account
+    system_account:Program<'info, System>,
+    //to pay the of the domain,need sign
+    payer: Signer<'info>,
+    //pubkey to bind the domain
     name_owner: Account<'info, only_pub>,
-    base_data: Account<'info, base_info>,
+    //the base data:such as account's space,lamport,and the hased name
+    base_data: Account<'info, base_info>,                        
     //name_class_opt: Account<'info, only_pub>,
     //parent domain: have -- common domain,  no -- create root domain
-    name_parent_owner_opt: Option<Account<'info, only_pub>>,
+    root_domain_opt: Option<Signer<'info>>,
+    //the data i want add, the ipfs data and other data
     init_data: Option<Account<'info, data>>
 }
 
@@ -86,10 +93,4 @@ pub struct base_info{
     pub hashed_name: Vec<u8>,
     pub space: u32,
 }
-
-// #[account]
-// pub struct create_type {
-//     pub if_root: bool,
-// }
-
 
