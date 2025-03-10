@@ -16,25 +16,25 @@ use delete::delete;
 pub struct Processor{}
 
 impl Processor {
-    pub fn create_name_process(ctx: Context<create_name_service>) -> ProgramResult{
+    pub fn create_process(ctx: Context<create_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start create a domian name");
         create(ctx)
     }
 
-    pub fn update_name_process(ctx: Context<update_name_service>) -> ProgramResult{
+    pub fn update_process(ctx: Context<update_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start update domain data");
         update(ctx)
     }
 
-    pub fn transfer_name_process(ctx: Context<transfer_name_service>) -> ProgramResult{
+    pub fn transfer_process(ctx: Context<transfer_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start transfer domain data");
         transfer(ctx)
     }
 
-    pub fn delete_name_process(ctx: Context<delete_name_service>) -> ProgramResult{
+    pub fn delete_process(ctx: Context<delete_name_service>) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start delete domain data");
         delete(ctx)

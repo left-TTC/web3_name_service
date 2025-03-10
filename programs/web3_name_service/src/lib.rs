@@ -12,20 +12,20 @@ pub mod web3_name_service {
 
     use super::*;
 
-    pub fn create_name (ctx: Context<create_name_service>) -> ProgramResult {
-        Processor::create_name_process(ctx)
+    pub fn create (ctx: Context<create_name_service>) -> ProgramResult {
+        Processor::create_process(ctx)
     }
 
-    pub fn update_name (ctx: Context<update_name_service>) -> ProgramResult {
-        Processor::update_name_process(ctx)
+    pub fn update (ctx: Context<update_name_service>) -> ProgramResult {
+        Processor::update_process(ctx)
     }
 
-    pub fn transfer_name (ctx: Context<transfer_name_service>) -> ProgramResult {
-        Processor::transfer_name_process(ctx)
+    pub fn transfer(ctx: Context<transfer_name_service>) -> ProgramResult {
+        Processor::transfer_process(ctx)
     }
-
-    pub fn delete_name (ctx: Context<delete_name_service>) -> ProgramResult {
-        Processor::delete_name_process(ctx)
+    //It doesn't seem necessary
+    pub fn delete(ctx: Context<delete_name_service>) -> ProgramResult {
+        Processor::delete_process(ctx)
     }
 }
 
@@ -80,6 +80,7 @@ pub struct  delete_name_service<'info> {
     name_account: UncheckedAccount<'info>,
     //The account that requested the delete transaction
     submit_account: Signer<'info>,
+    
     refund_target: UncheckedAccount<'info>,
 }
 

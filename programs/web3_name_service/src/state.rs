@@ -49,7 +49,7 @@ pub mod fun{
     //usage: calculate the PDA
     //program_id: the id of current program
     //hashed_name: off-chain, the hased value of domain
-    //
+    //if use root, means it's common domain,
     pub fn get_seeds_and_key(
         program_id: &Pubkey,
         hashed_name: Vec<u8>,
