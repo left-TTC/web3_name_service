@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::{invoke, invoke_signed};
-use crate::create_name_service;
+use crate::{create_name_service, base_data};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 use crate::state::fun::get_seeds_and_key;
 use crate::state::NameRecordHeader;
@@ -12,41 +12,47 @@ use anchor_lang::solana_program::system_instruction;
 @Function: create_root_domain
 @description: this function used to create a root domain     
 */
-pub fn create(ctx: Context<create_name_service>) -> ProgramResult {
+pub fn create(
+    ctx: Context<create_name_service>,
+    init_data: base_data
+    ) -> ProgramResult {
+
     //confirm the name_accounts_key
-    let program_id = ctx.program_id;
-    let hashed_name = ctx.accounts.base_data.hashed_name.clone();
-    //the root dimain account
-    let pubkey_root: Option<Pubkey> = 
-        ctx.accounts.root_domain_opt.as_ref().map(|acc| acc.key());
-    //generate the PDA for the name accounts    
-    let (name_accounts_key, seeds) = get_seeds_and_key(
-        program_id, 
-        hashed_name,
-        &pubkey_root,
+    let root_domain_key = if let Some(value) = &ctx.accounts.root_domain_opt {
+        Some(*value.key)
+    }else{
+        None
+    };
+    let (name_account_key, seeds) = get_seeds_and_key(
+        ctx.program_id,
+        init_data.hashed_name,
+        &root_domain_key,
     );
-    //check whether the domain name entered is correct
-    if name_accounts_key != *ctx.accounts.name_account.key {
+    if *ctx.accounts.name_account.key != name_account_key {
         #[cfg(feature = "Debug")]
         msg!("incoming domain name err");
         return Err(ProgramError::InvalidArgument);
-    }
+    };
+    msg!("name account key ok");
+
+
     //prevent secondary creation
-    //check the account_info from last contract
     if ctx.accounts.name_account.data.borrow().len() > 0 {
-        //deserialize the data
         let name_record_header =
             NameRecordHeader::unpack_from_slice(&ctx.accounts.name_account.data.borrow())?;
-        //if the stored data is't the default data: return err
+        //default = can register but need't to create it
+        //we can revise it all the time
         if name_record_header.owner != Pubkey::default() {
             #[cfg(feature = "Debug")]
             msg!("The given name account already exists.");
             return Err(ProgramError::InvalidArgument);
         }
-        //Conflict
-        return Err(ProgramError::InvalidArgument);
     }
+    msg!("name account data ok");
+
+
     //No additional types are considered for now
+    //in sns called name_class
 
     //create a mut root: used to construct NameRecordHeader 
     let mut root:Pubkey = Pubkey::default();
@@ -78,29 +84,37 @@ pub fn create(ctx: Context<create_name_service>) -> ProgramResult {
         //rppt domain: use self
         root = ctx.accounts.name_account.key.clone();
     }
+    msg!("point ok");
+
+
     //ensure there is a domain owner
-    if &ctx.accounts.name_owner.pubkey == &Pubkey::default() {
+    if init_data.owner == Pubkey::default() {
         #[cfg(feature = "Debug")]
         msg!("The owner cannot be `Pubkey::default()`.");
         return Err(ProgramError::InvalidArgument);
     }
+    msg!("owner ok");
 
     //valid data length
+    #[cfg(feature = "devnet")]
     if ctx.accounts.name_account.data.borrow().len() == 0 {
         //transfe lammport to name_account and create the account
         invoke(
-            &system_instruction::transfer(ctx.accounts.payer.key, &name_accounts_key, ctx.accounts.base_data.lamports),
+            &system_instruction::transfer(
+                ctx.accounts.payer.key, 
+                ctx.accounts.name_account.key, 
+                init_data.lamports),
             &[
                 ctx.accounts.payer.to_account_info().clone(),
                 ctx.accounts.name_account.to_account_info().clone(),
                 ctx.accounts.system_account.to_account_info().clone(),
-            ],
+                ],
         )?;
         //Apply for a space and pay the fee
         invoke_signed(
             &system_instruction::allocate(
                 &*ctx.accounts.name_account.key,
-                NameRecordHeader::LEN.saturating_add(ctx.accounts.base_data.space as usize) as u64,
+                NameRecordHeader::LEN.saturating_add(init_data.space as usize) as u64,
             ),
             &[ctx.accounts.name_account.to_account_info().clone(), ctx.accounts.system_account.to_account_info().clone()],
             &[&seeds.chunks(32).collect::<Vec<&[u8]>>()],
@@ -117,8 +131,8 @@ pub fn create(ctx: Context<create_name_service>) -> ProgramResult {
     //Data writing does not require explicit calls to code that interacts with the chain
     //In Solana, account data modification is implicit, and the program only needs to modify the data field directly.
     //trasfer ipfs data to u8
-    let ipfs_data = if let Some(init_data_account) = &ctx.accounts.init_data {
-        if let Some(ipfs_vec) = &init_data_account.ipfs {
+    let ipfs_data = if let Some(init_data_account) = init_data.ipfs {
+        if let ipfs_vec = &init_data_account {
             if ipfs_vec.len() != 46 {
                 #[cfg(feature = "Debug")]
                 msg!("IPFS CID must be 46 bytes long"); 
@@ -137,7 +151,7 @@ pub fn create(ctx: Context<create_name_service>) -> ProgramResult {
     
     //Construct a NameRecordHeader structure
     let will_record_data = NameRecordHeader {
-        owner: ctx.accounts.name_owner.pubkey,
+        owner: init_data.owner,
         ipfs: ipfs_data,
         root: root,
     };

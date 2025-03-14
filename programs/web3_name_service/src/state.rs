@@ -45,6 +45,15 @@ impl Pack for NameRecordHeader {
 pub mod fun{
     use anchor_lang::{prelude::*, solana_program::entrypoint::ProgramResult};
     use crate::web3_data;
+    use anchor_lang::solana_program::hash::hashv;
+
+    pub const HASH_PREFIX: &str = "WEB3 Name Service";
+
+    pub fn get_hashed_name(name: &str) -> Vec<u8> {
+        hashv(&[(HASH_PREFIX.to_owned() + name).as_bytes()])
+            .as_ref()
+            .to_vec()
+    }
 
     //usage: calculate the PDA
     //program_id: the id of current program
@@ -54,8 +63,7 @@ pub mod fun{
         program_id: &Pubkey,
         hashed_name: Vec<u8>,
         root_opt: &Option<Pubkey>,
-    ) -> (Pubkey, Vec<u8>) {
-        //hashed name as the init seeds
+    ) -> (Pubkey, Vec<u8>) {        
         let mut seeds_vec: Vec<u8> = hashed_name;
         //root domain(when create a root domian,use default)
         let root_domian = root_opt.clone().unwrap_or_default();

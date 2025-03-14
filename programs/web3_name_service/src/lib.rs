@@ -12,8 +12,11 @@ pub mod web3_name_service {
 
     use super::*;
 
-    pub fn create (ctx: Context<create_name_service>) -> ProgramResult {
-        Processor::create_process(ctx)
+    pub fn create (
+        ctx: Context<create_name_service>,
+        data: base_data
+        ) -> ProgramResult {
+        Processor::create_process(ctx, data)
     }
 
     pub fn update (ctx: Context<update_name_service>) -> ProgramResult {
@@ -40,14 +43,19 @@ pub struct create_name_service<'info>{
     //to pay the of the domain,need sign
     payer: Signer<'info>,
     //pubkey to bind the domain
-    name_owner: Account<'info, only_pub>,
-    //the base data:such as account's space,lamport,and the hased name
-    base_data: Account<'info, base_info>,                        
+    name_owner: UncheckedAccount<'info>,                      
     //name_class_opt: Account<'info, only_pub>,
     //parent domain: have -- common domain,  no -- create root domain
-    root_domain_opt: Option<Signer<'info>>,
-    //the data i want add, the ipfs data and other data
-    init_data: Option<Account<'info, web3_data>>
+    root_domain_opt: Option<UncheckedAccount<'info>>,
+}
+
+#[account]
+pub struct base_data {
+    lamports: u64,
+    hashed_name: Vec<u8>,
+    space: u32,
+    owner: Pubkey,
+    ipfs: Option<Vec<u8>>,
 }
 
 #[derive(Accounts)]
@@ -99,5 +107,23 @@ pub struct base_info{
     pub lamports: u64,
     pub hashed_name: Vec<u8>,
     pub space: u32,
+}
+
+/*         TEST         */
+#[cfg(test)]
+mod test {
+    use super::*;
+    use anchor_lang::prelude::*;
+    use anchor_lang::solana_program::pubkey::Pubkey;
+    use anchor_lang::solana_program::{lamports, system_program};
+    use anchor_lang::solana_program::epoch_schedule::Epoch;
+    use anchor_lang::solana_program::sysvar;
+
+    #[test]
+    fn test_create() {
+        msg!("start create test");
+        
+    }
+
 }
 

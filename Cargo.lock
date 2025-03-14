@@ -1812,7 +1812,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "web3_name_service"
+name = "web3nameservice"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",

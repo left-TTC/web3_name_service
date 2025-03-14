@@ -6,14 +6,14 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-web3_name_service = "8urcfunkMXmN59aTzW8SLPGVc5r8Fk7LEokbnQCZXvCp"
+web3nameservice = "8urcfunkMXmN59aTzW8SLPGVc5r8Fk7LEokbnQCZXvCp"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+wallet = "/home/f/wallet/left-solana-wallet.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
