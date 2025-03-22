@@ -18,19 +18,32 @@ pub fn create(
     ) -> ProgramResult {
 
     //confirm the name_accounts_key
+    let mut if_root = false;
     let root_domain_key = if let Some(value) = &ctx.accounts.root_domain_opt {
-        Some(*value.key)
+        msg!("root: {}", value.key);
+        msg!("payer: {}", ctx.accounts.payer.key);
+        if value.key == ctx.accounts.payer.key {
+            if_root = true;
+            None
+        }else{
+            if_root = true;
+            Some(value.key)
+        }
     }else{
+        msg!("root is none, ok");
         None
     };
     let (name_account_key, seeds) = get_seeds_and_key(
         ctx.program_id,
         init_data.hashed_name,
-        &root_domain_key,
+        ctx.accounts.domain_class.key,
+        root_domain_key,
     );
     if *ctx.accounts.name_account.key != name_account_key {
         #[cfg(feature = "Debug")]
         msg!("incoming domain name err");
+        msg!("coming {}", ctx.accounts.name_account.key);
+        msg!("need {}", name_account_key);
         return Err(ProgramError::InvalidArgument);
     };
     msg!("name account key ok");
@@ -45,39 +58,51 @@ pub fn create(
         if name_record_header.owner != Pubkey::default() {
             #[cfg(feature = "Debug")]
             msg!("The given name account already exists.");
+            msg!("now the owner: {}",name_record_header.owner);
             return Err(ProgramError::InvalidArgument);
         }
     }
     msg!("name account data ok");
 
-
     //No additional types are considered for now
     //in sns called name_class
+    if *ctx.accounts.domain_class.key != Pubkey::default()
+        && !ctx.accounts.domain_class.is_signer {
+            msg!("The given name class is not a signer.");
+            return Err(ProgramError::InvalidArgument);
+    }
+    msg!("class check ok");
 
     //create a mut root: used to construct NameRecordHeader 
-    let mut root:Pubkey = Pubkey::default();
+    let mut root:Pubkey;
 
     //The root domain does not require a root domain verify
     //if register contract does't convert the root domain
     //We think that creating a common domain name
-    if let Some(root_domain) = &ctx.accounts.root_domain_opt {
-        #[cfg(feature = "Debug")]
-        msg!("this is a common domain");
-        if !root_domain.is_signer {
+    if if_root == false {
+        if let Some(root_domain) = &ctx.accounts.root_domain_opt{
             #[cfg(feature = "Debug")]
-            msg!("don't have the siganature of root domain");
-            return Err(ProgramError::InvalidArgument);
-        }else {
-            let root_domain_record_header = 
-                NameRecordHeader::unpack_from_slice(&root_domain.data.borrow())?;
-            
-            if &root_domain_record_header.owner != root_domain.key {
-                msg!("The given root domain account owner is not correct.");
+            msg!("this is a common domain");
+            if !root_domain.is_signer {
+                #[cfg(feature = "Debug")]
+                msg!("don't have the siganature of root domain");
                 return Err(ProgramError::InvalidArgument);
+            }else {
+                let root_domain_record_header = 
+                    NameRecordHeader::unpack_from_slice(&root_domain.data.borrow())?;
+                
+                if &root_domain_record_header.owner != root_domain.key {
+                    msg!("The given root domain account owner is not correct.");
+                    return Err(ProgramError::InvalidArgument);
+                }
             }
-        }
-        //common accout: use root account;s key
-        root = root_domain.key.clone();
+            //common accout: use root account;s key
+            root = root_domain.key.clone();
+        }else{
+            msg!("this is a root domain");
+            //rppt domain: use self
+            root = ctx.accounts.name_account.key.clone();
+        }   
     }else {
         #[cfg(feature = "Debug")]
         msg!("this is a root domain");
@@ -85,7 +110,6 @@ pub fn create(
         root = ctx.accounts.name_account.key.clone();
     }
     msg!("point ok");
-
 
     //ensure there is a domain owner
     if init_data.owner == Pubkey::default() {
@@ -132,7 +156,9 @@ pub fn create(
     //In Solana, account data modification is implicit, and the program only needs to modify the data field directly.
     //trasfer ipfs data to u8
     let ipfs_data = if let Some(init_data_account) = init_data.ipfs {
+        msg!("check ipfs: {}",String::from_utf8_lossy(&init_data_account));
         if let ipfs_vec = &init_data_account {
+            msg!("length is {}", ipfs_vec.len());
             if ipfs_vec.len() != 46 {
                 #[cfg(feature = "Debug")]
                 msg!("IPFS CID must be 46 bytes long"); 
@@ -148,15 +174,20 @@ pub fn create(
     } else {
         None
     };
-    
+    msg!("revise ipfs ok");
+    msg!("class: {}", *ctx.accounts.domain_class.key);
     //Construct a NameRecordHeader structure
     let will_record_data = NameRecordHeader {
         owner: init_data.owner,
-        ipfs: ipfs_data,
         root: root,
+        class: *ctx.accounts.domain_class.key,
+        ipfs: ipfs_data,
     };
     //Implicit Write in
+    //Solana's account data is directly mapped into memory
+
     will_record_data.pack_into_slice(&mut ctx.accounts.name_account.data.borrow_mut());
 
+    msg!("no problem here");
     Ok(())
 }

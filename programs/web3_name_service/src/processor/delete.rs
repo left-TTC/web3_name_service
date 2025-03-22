@@ -1,5 +1,4 @@
 use crate::delete_name_service;
-use anchor_lang::accounts::account;
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 use anchor_lang::prelude::*;
 use crate::state::NameRecordHeader;
@@ -17,6 +16,7 @@ pub fn delete(ctx: Context<delete_name_service>) -> ProgramResult {
         msg!("Submitter has no permission");
         return Err(ProgramError::InvalidArgument);
     }
+    
     //Overwrite data to zero
     //Equivalent to clearing account data
     let zero_vec = vec![0; ctx.accounts.name_account.data_len()];

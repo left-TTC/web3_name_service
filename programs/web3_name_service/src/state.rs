@@ -10,12 +10,16 @@ use anchor_lang::solana_program::msg;
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct NameRecordHeader{
     //owner of this name
+    //should be the top domain
     pub owner: Pubkey,
     //define the data type
-    //ipfs cid?   
-    pub ipfs: Option<[u8; 46]>,
     //root domain pubkey
     pub root: Pubkey,
+
+    pub class: Pubkey,
+    //ipfs cid?   
+    pub ipfs: Option<[u8; 46]>,
+    
 }
 //Prevent external code from implementing certain traits for NameRecordHeader
 impl Sealed for NameRecordHeader {}
@@ -23,7 +27,8 @@ impl Sealed for NameRecordHeader {}
 //Serialize and deserialize structures into byte arrays
 impl Pack for NameRecordHeader {
     //pubkey:32 ipfs:
-    const LEN: usize = 79;
+    //32+32+46+1 = 111;
+    const LEN: usize = 111;
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let mut slice = dst;
@@ -44,7 +49,7 @@ impl Pack for NameRecordHeader {
 
 pub mod fun{
     use anchor_lang::{prelude::*, solana_program::entrypoint::ProgramResult};
-    use crate::web3_data;
+    use crate::{update_data, web3_data};
     use anchor_lang::solana_program::hash::hashv;
 
     pub const HASH_PREFIX: &str = "WEB3 Name Service";
@@ -62,12 +67,19 @@ pub mod fun{
     pub fn get_seeds_and_key(
         program_id: &Pubkey,
         hashed_name: Vec<u8>,
-        root_opt: &Option<Pubkey>,
+        class: &Pubkey,
+        root_opt: Option<&Pubkey>,
     ) -> (Pubkey, Vec<u8>) {        
         let mut seeds_vec: Vec<u8> = hashed_name;
+
+        //push class account
+        for b in class.to_bytes() {
+            seeds_vec.push(b);
+        }
+
         //root domain(when create a root domian,use default)
-        let root_domian = root_opt.clone().unwrap_or_default();
-        //add root to the sed
+        let root_domian = root_opt.cloned().unwrap_or_default();
+        //add root to the seed
         for b in root_domian.to_bytes() {
             seeds_vec.push(b);
         }
@@ -79,7 +91,7 @@ pub mod fun{
         (name_account_key, seeds_vec)
     }
 
-    pub fn write_data(write_account: &AccountInfo, input: &web3_data) -> bool{
+    pub fn write_data(write_account: &AccountInfo, input: &update_data) -> bool{
         let mut account_data = write_account.data.borrow_mut();
         //Serialize
         if let Ok(serialized_data) = input.try_to_vec()  {
