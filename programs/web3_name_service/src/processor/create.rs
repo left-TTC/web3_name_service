@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use crate::{create_name_service, base_data};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
-use crate::state::fun::get_seeds_and_key;
+use crate::state::fun::{get_hashed_name, get_seeds_and_key};
 use crate::state::NameRecordHeader;
 use anchor_lang::solana_program::program_pack::Pack;
 use anchor_lang::solana_program::system_instruction;
@@ -19,10 +19,12 @@ pub fn create(
 
     //confirm the name_accounts_key
     let mut if_root = false;
+    
     let root_domain_key = if let Some(value) = &ctx.accounts.root_domain_opt {
         msg!("root: {}", value.key);
         msg!("payer: {}", ctx.accounts.payer.key);
-        if value.key == ctx.accounts.payer.key {
+        if value.key == ctx.accounts.payer.key
+            || value.key == &Pubkey::default() {
             if_root = true;
             None
         }else{
@@ -33,12 +35,14 @@ pub fn create(
         msg!("root is none, ok");
         None
     };
+
     let (name_account_key, seeds) = get_seeds_and_key(
         ctx.program_id,
-        init_data.hashed_name,
+        init_data.hashed_name.clone(),
         ctx.accounts.domain_class.key,
         root_domain_key,
     );
+
     if *ctx.accounts.name_account.key != name_account_key {
         #[cfg(feature = "Debug")]
         msg!("incoming domain name err");
@@ -50,6 +54,7 @@ pub fn create(
 
 
     //prevent secondary creation
+    //record account is same
     if ctx.accounts.name_account.data.borrow().len() > 0 {
         let name_record_header =
             NameRecordHeader::unpack_from_slice(&ctx.accounts.name_account.data.borrow())?;
@@ -62,6 +67,7 @@ pub fn create(
             return Err(ProgramError::InvalidArgument);
         }
     }
+
     msg!("name account data ok");
 
     //No additional types are considered for now
@@ -79,22 +85,16 @@ pub fn create(
     //The root domain does not require a root domain verify
     //if register contract does't convert the root domain
     //We think that creating a common domain name
-    if if_root == false {
+    if !if_root{
         if let Some(root_domain) = &ctx.accounts.root_domain_opt{
             #[cfg(feature = "Debug")]
             msg!("this is a common domain");
-            if !root_domain.is_signer {
-                #[cfg(feature = "Debug")]
-                msg!("don't have the siganature of root domain");
+            let root_domain_record_header = 
+                NameRecordHeader::unpack_from_slice(&root_domain.data.borrow())?;
+            
+            if &root_domain_record_header.owner != root_domain.key {
+                msg!("The given root domain account owner is not correct.");
                 return Err(ProgramError::InvalidArgument);
-            }else {
-                let root_domain_record_header = 
-                    NameRecordHeader::unpack_from_slice(&root_domain.data.borrow())?;
-                
-                if &root_domain_record_header.owner != root_domain.key {
-                    msg!("The given root domain account owner is not correct.");
-                    return Err(ProgramError::InvalidArgument);
-                }
             }
             //common accout: use root account;s key
             root = root_domain.key.clone();
@@ -118,6 +118,17 @@ pub fn create(
         return Err(ProgramError::InvalidArgument);
     }
     msg!("owner ok");
+
+    //we need to determine wheather create record account
+    let mut byte_owner: Vec<u8> = Vec::new();
+    let byte = init_data.owner.clone().to_bytes();
+    byte_owner.extend_from_slice(&byte);
+
+    let mut if_record = false;
+    if byte_owner == init_data.hashed_name.clone(){
+        if_record = true;
+    }
+
 
     //valid data length
     #[cfg(feature = "devnet")]

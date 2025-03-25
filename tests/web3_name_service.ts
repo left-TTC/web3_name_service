@@ -55,7 +55,7 @@ describe("web3_name_service", () => {
         nameAccount: nameAccountKey,
         payer: payer.publicKey,
         domainClass: domainClass.publicKey, 
-        //rootDomainOpt: null,
+        rootDomainOpt: PublicKey.default,
       })
       .signers([payer, domainClass])
       .rpc();

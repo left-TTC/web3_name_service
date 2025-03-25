@@ -5,6 +5,7 @@ declare_id!("BWK7ZQWjQ9fweneHfsYmof7znPr5GyedCWs2J8JhHxD3");
 
 pub mod processor;
 pub mod state;
+pub mod cpi;
 
 #[program]
 pub mod web3_name_service {
@@ -57,16 +58,32 @@ pub struct create_name_service<'info>{
     //common, twitter
     domain_class: Signer<'info>,
     //parent domain: have -- common domain,  no -- create root domain
-    root_domain_opt: Option<Signer<'info>>,
+    root_domain_opt: Option<UncheckedAccount<'info>>,
 }
 
 #[account]
 pub struct base_data {
-    lamports: u64,
-    hashed_name: Vec<u8>,
-    space: u32,
-    owner: Pubkey,
-    ipfs: Option<Vec<u8>>,
+    pub lamports: u64,
+    pub hashed_name: Vec<u8>,
+    pub space: u32,
+    pub owner: Pubkey,
+    pub ipfs: Option<Vec<u8>>,
+}
+
+
+#[derive(Accounts)]
+pub struct create_record_service<'info>{
+    //the domain account that will be created
+    /// CHECK: This account is verified in the instruction logic to ensure its safety.
+    #[account(mut)]
+    record_account: UncheckedAccount<'info>,
+    //the solana program account
+    system_account:Program<'info, System>,
+    //to pay the of the domain,need sign
+    payer: Signer<'info>,  
+
+    //parent domain: have -- common domain,  no -- create root domain
+    root_domain_opt: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
@@ -146,55 +163,36 @@ pub struct base_info{
 
 
 
-/*         TEST         */
 #[cfg(test)]
 mod test {
     use super::*;
     use anchor_lang::prelude::*;
-    use anchor_lang::solana_program::pubkey::Pubkey;
-    use anchor_lang::solana_program::{lamports, system_program};
-    use anchor_lang::solana_program::epoch_schedule::Epoch;
-    use anchor_lang::solana_program::sysvar;
+    use anchor_lang::solana_program::hash::hash;
+    use std::convert::TryInto;
 
-
-    fn generate_account<'a>(
-        pubkey: &'a Pubkey, 
-        signer: bool,
-        write: bool,
-        lamports: &'a mut u64,
-        data: &'a mut [u8],
-        owner: &'a Pubkey,
-        executable: bool,
-    ) -> AccountInfo<'a> {
-        AccountInfo::new(
-            pubkey,
-            signer,
-            write,
-            lamports,
-            data,
-            owner,
-            executable,
-            Epoch::default(),
-        )
+    // 计算指令的 Discriminator
+    fn get_discriminator(name: &str) -> [u8; 8] {
+        let sighash = hash(format!("global:{}", name).as_bytes());
+        sighash.to_bytes()[..8].try_into().unwrap()
     }
 
-    fn construct_base () -> Vec<u8> {
-        let mut data = Vec::new();
+    #[test]
+    fn test_all_discriminators() {
+        let create_domain_discriminator = get_discriminator("create_domain");
+        let update_domain_discriminator = get_discriminator("update_domain");
+        let transfer_domain_discriminator = get_discriminator("transfer_domain");
+        let delete_domain_discriminator = get_discriminator("delete_domain");
 
-        let owner_pubkey = Pubkey::default();
-        data.extend_from_slice(owner_pubkey.as_ref());
+        println!("Discriminators:");
+        println!("create_domain: {:?}", create_domain_discriminator);
+        println!("update_domain: {:?}", update_domain_discriminator);
+        println!("transfer_domain: {:?}", transfer_domain_discriminator);
+        println!("delete_domain: {:?}", delete_domain_discriminator);
 
-        let root_pubkey = Pubkey::new_unique();
-        data.extend_from_slice(root_pubkey.as_ref());
-
-        let mut ipfs_data = [0u8; 46];
-        ipfs_data.copy_from_slice(b"QmYwAPJzv5CZsnAztbCbsCkwiHyrETrB7CNH9f3T3AnfEj"); 
-        data.push(1); 
-        data.extend_from_slice(&ipfs_data);
-
-        assert_eq!(data.len(), 111, "base_data's length is 111");
-        data
+        assert_eq!(create_domain_discriminator.len(), 8);
+        assert_eq!(update_domain_discriminator.len(), 8);
+        assert_eq!(transfer_domain_discriminator.len(), 8);
+        assert_eq!(delete_domain_discriminator.len(), 8);
     }
-
 }
 
