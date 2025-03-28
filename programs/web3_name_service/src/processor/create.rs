@@ -3,7 +3,7 @@ use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use crate::{create_name_service, base_data};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 use crate::state::fun::{get_hashed_name, get_seeds_and_key};
-use crate::state::NameRecordHeader;
+use crate::state::{DomainRecordHeader, NameRecordHeader};
 use anchor_lang::solana_program::program_pack::Pack;
 use anchor_lang::solana_program::system_instruction;
 
@@ -39,7 +39,6 @@ pub fn create(
     let (name_account_key, seeds) = get_seeds_and_key(
         ctx.program_id,
         init_data.hashed_name.clone(),
-        ctx.accounts.domain_class.key,
         root_domain_key,
     );
 
@@ -54,7 +53,8 @@ pub fn create(
 
 
     //prevent secondary creation
-    //record account is same
+    //record account is same,but we only do here is create
+    //not update, so the data's lenth should be 0
     if ctx.accounts.name_account.data.borrow().len() > 0 {
         let name_record_header =
             NameRecordHeader::unpack_from_slice(&ctx.accounts.name_account.data.borrow())?;
@@ -70,14 +70,6 @@ pub fn create(
 
     msg!("name account data ok");
 
-    //No additional types are considered for now
-    //in sns called name_class
-    if *ctx.accounts.domain_class.key != Pubkey::default()
-        && !ctx.accounts.domain_class.is_signer {
-            msg!("The given name class is not a signer.");
-            return Err(ProgramError::InvalidArgument);
-    }
-    msg!("class check ok");
 
     //create a mut root: used to construct NameRecordHeader 
     let mut root:Pubkey;
@@ -145,15 +137,30 @@ pub fn create(
                 ctx.accounts.system_account.to_account_info().clone(),
                 ],
         )?;
-        //Apply for a space and pay the fee
-        invoke_signed(
-            &system_instruction::allocate(
-                &*ctx.accounts.name_account.key,
-                NameRecordHeader::LEN.saturating_add(init_data.space as usize) as u64,
-            ),
-            &[ctx.accounts.name_account.to_account_info().clone(), ctx.accounts.system_account.to_account_info().clone()],
-            &[&seeds.chunks(32).collect::<Vec<&[u8]>>()],
-        )?;
+        if !if_record{
+            //create a name account
+            //Apply for a space and pay the fee
+            invoke_signed(
+                &system_instruction::allocate(
+                    &*ctx.accounts.name_account.key,
+                    NameRecordHeader::LEN.saturating_add(init_data.space as usize) as u64,
+                ),
+                &[ctx.accounts.name_account.to_account_info().clone(), ctx.accounts.system_account.to_account_info().clone()],
+                &[&seeds.chunks(32).collect::<Vec<&[u8]>>()],
+            )?;
+        }else {
+            //create record account
+            //Apply for a space and pay the fee
+            invoke_signed(
+                &system_instruction::allocate(
+                    &*ctx.accounts.name_account.key,
+                    //Directly hard-coded in units of 32 bytes
+                    DomainRecordHeader::LEN.saturating_add(32) as u64,
+                ),
+                &[ctx.accounts.name_account.to_account_info().clone(), ctx.accounts.system_account.to_account_info().clone()],
+                &[&seeds.chunks(32).collect::<Vec<&[u8]>>()],
+            )?;
+        }
         //assign the program ownership
         invoke_signed(
             &system_instruction::assign(ctx.accounts.name_account.key, ctx.program_id),
@@ -163,41 +170,52 @@ pub fn create(
         )?;
     }
 
-    //Data writing does not require explicit calls to code that interacts with the chain
-    //In Solana, account data modification is implicit, and the program only needs to modify the data field directly.
-    //trasfer ipfs data to u8
-    let ipfs_data = if let Some(init_data_account) = init_data.ipfs {
-        msg!("check ipfs: {}",String::from_utf8_lossy(&init_data_account));
-        if let ipfs_vec = &init_data_account {
-            msg!("length is {}", ipfs_vec.len());
-            if ipfs_vec.len() != 46 {
+
+    if !if_record{
+        //Data writing does not require explicit calls to code that interacts with the chain
+        //In Solana, account data modification is implicit, and the program only needs to modify the data field directly.
+        //trasfer ipfs data to u8
+        let ipfs_data = if let Some(ref init_data_account) = init_data.ipfs {
+            msg!("Check IPFS: {}", String::from_utf8_lossy(init_data_account));
+    
+            if init_data_account.len() != 46 {
                 #[cfg(feature = "Debug")]
-                msg!("IPFS CID must be 46 bytes long"); 
+                msg!("IPFS CID must be 46 bytes long");
                 return Err(ProgramError::InvalidArgument);
             }
     
             let mut ipfs_array = [0u8; 46];
-            ipfs_array.copy_from_slice(ipfs_vec);
+            ipfs_array.copy_from_slice(init_data_account);
             Some(ipfs_array)
         } else {
             None
-        }
-    } else {
-        None
-    };
-    msg!("revise ipfs ok");
-    msg!("class: {}", *ctx.accounts.domain_class.key);
-    //Construct a NameRecordHeader structure
-    let will_record_data = NameRecordHeader {
-        owner: init_data.owner,
-        root: root,
-        class: *ctx.accounts.domain_class.key,
-        ipfs: ipfs_data,
-    };
-    //Implicit Write in
-    //Solana's account data is directly mapped into memory
+        };
 
-    will_record_data.pack_into_slice(&mut ctx.accounts.name_account.data.borrow_mut());
+        //Construct a NameRecordHeader structure
+        let will_record_data = NameRecordHeader {
+            owner: init_data.owner,
+            root: root,
+            ipfs: ipfs_data.clone(),
+        };
+        //Implicit Write in
+        //Solana's account data is directly mapped into memory
+
+        will_record_data.pack_into_slice(&mut ctx.accounts.name_account.data.borrow_mut());
+    }else {
+        let domain_data = if let Some(ref init_data_account) = init_data.ipfs {
+            init_data_account
+        }else{
+            msg!("record account must get a domain data");
+            return Err(ProgramError::InvalidArgument);
+        };
+
+        let will_record_data = DomainRecordHeader{
+            root: root,
+            domains: domain_data.clone(),
+        };
+
+        will_record_data.pack_into_slice(&mut ctx.accounts.name_account.data.borrow_mut());
+    }
 
     msg!("no problem here");
     Ok(())

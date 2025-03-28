@@ -39,16 +39,8 @@ pub fn update(
         return Err(ProgramError::InvalidArgument);
     };
 
-    //means only the class account can update the data
-    //user account will send request to class account
-    if name_record_header.class != Pubkey::default()
-        && name_record_header.class != *ctx.accounts.name_account.key {
-            msg!("The given name class account is incorrect.");
-            return Err(ProgramError::InvalidArgument);
-    };
 
-    if name_record_header.class == Pubkey::default()
-            && *ctx.accounts.name_update_signer.key != name_record_header.owner
+    if *ctx.accounts.name_update_signer.key != name_record_header.owner
             && !if_common_account
         {
             msg!("The given name owner account is incorrect.");

@@ -5,8 +5,8 @@ import { PublicKey, Keypair } from "@solana/web3.js";
 import { Web3NameService } from "../target/types/web3_name_service";
 import { Buffer } from "buffer";
 
-import testClassKeyPair from "/home/f/wallet/captain-solana-wallet.json";
-import testPayerKeypair from "/home/f/wallet/left-solana-wallet.json";
+import testClassKeyPair from "/home/f/wallet/test2.json";
+import testPayerKeypair from "/home/f/wallet/test1.json";
 
 
 describe("web3_name_service", () => {
@@ -17,9 +17,6 @@ describe("web3_name_service", () => {
 
   //fristly, create relative account
 
-  //class account
-    const secretKey = Uint8Array.from(testClassKeyPair)
-    const domainClass = Keypair.fromSecretKey(secretKey);
 
   //payer
   const payerSecretKey = Uint8Array.from(testPayerKeypair)
@@ -29,7 +26,7 @@ describe("web3_name_service", () => {
   const root_name = "aaa"
 
   const {nameAccountKey} = getSeedAndKey(
-    program.programId, getHashedName(root_name), domainClass.publicKey, null
+    program.programId, getHashedName(root_name), null
   )
 
   const hashedNameUint8 = getHashedName(root_name)
@@ -48,16 +45,14 @@ describe("web3_name_service", () => {
   it("this is create root domain test", async () => {
     //GLy1fKq1R2CmCCGBdXMARo9X7Y4dH8fVPECVXKP5hN5Y
     console.log("calculate:", nameAccountKey)
-    console.log("calculate:", domainClass.publicKey.toBase58())
     const tx = await program.methods
       .create(baseData)
       .accounts({
-        nameAccount: nameAccountKey,
+        nameAccount: nameAccountKey,  
         payer: payer.publicKey,
-        domainClass: domainClass.publicKey, 
         rootDomainOpt: PublicKey.default,
       })
-      .signers([payer, domainClass])
+      .signers([payer])
       .rpc();
       console.log("create over")
   });
@@ -67,7 +62,6 @@ describe("web3_name_service", () => {
 
 export const WEB3_NAME_SERVICE_ID = new PublicKey("BWK7ZQWjQ9fweneHfsYmof7znPr5GyedCWs2J8JhHxD3");
 
-export const WEB3_ROOT = new PublicKey("52F3LuKrH19f8JATdXn1w9F3kFQceK3n5ticQmbjVs78");
 
 function getHashedName(name: string){
   const HASH_PREFIX = "WEB3 Name Service";
@@ -77,10 +71,9 @@ function getHashedName(name: string){
 }
 
 function getSeedAndKey(
-  programid: PublicKey, hashedName: Uint8Array, domainClass: PublicKey, rootOpt: null | PublicKey ){
+  programid: PublicKey, hashedName: Uint8Array, rootOpt: null | PublicKey ){
   
   let seeds = new Uint8Array([...hashedName]);
-  seeds = new Uint8Array([...seeds, ...domainClass.toBytes()]);
   
   const rootDomain = rootOpt || PublicKey.default;
   seeds = new Uint8Array([...seeds, ...rootDomain.toBytes()]);

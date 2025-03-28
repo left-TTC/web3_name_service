@@ -5,17 +5,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-counter = "BWK7ZQWjQ9fweneHfsYmof7znPr5GyedCWs2J8JhHxD3"
+counter = "F6PrVaeL2TegV2fmXFGW1dQeCXCCBZffn1JT5PUEiPMM"
 
 [programs.devnet]
-counter = "BWK7ZQWjQ9fweneHfsYmof7znPr5GyedCWs2J8JhHxD3"
+counter = "F6PrVaeL2TegV2fmXFGW1dQeCXCCBZffn1JT5PUEiPMM"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/wallet/left-solana-wallet.json"
+wallet = "~/wallet/test1.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

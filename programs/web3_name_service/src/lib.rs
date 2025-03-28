@@ -1,11 +1,10 @@
 use anchor_lang::{accounts::{signer, unchecked_account}, prelude::*, solana_program::pubkey};
 use processor::Processor;
 
-declare_id!("BWK7ZQWjQ9fweneHfsYmof7znPr5GyedCWs2J8JhHxD3");
+declare_id!("F6PrVaeL2TegV2fmXFGW1dQeCXCCBZffn1JT5PUEiPMM");
 
 pub mod processor;
 pub mod state;
-pub mod cpi;
 
 #[program]
 pub mod web3_name_service {
@@ -49,14 +48,9 @@ pub struct create_name_service<'info>{
     //the solana program account
     system_account:Program<'info, System>,
     //to pay the of the domain,need sign
+    #[account(mut)]
     payer: Signer<'info>,  
 
-    //this is type of the class
-    //we only have the common class now
-    //but if we want to add other function
-    //class will make it easier
-    //common, twitter
-    domain_class: Signer<'info>,
     //parent domain: have -- common domain,  no -- create root domain
     root_domain_opt: Option<UncheckedAccount<'info>>,
 }

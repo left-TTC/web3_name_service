@@ -16,7 +16,6 @@ pub struct NameRecordHeader{
     //root domain pubkey
     pub root: Pubkey,
 
-    pub class: Pubkey,
     //ipfs cid?   
     pub ipfs: Option<[u8; 46]>,
     
@@ -38,6 +37,34 @@ impl Pack for NameRecordHeader {
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
         let mut p = src;
         NameRecordHeader::deserialize(&mut p).map_err(|_| {
+            msg!("Failed to deserialize name record");
+            ProgramError::InvalidAccountData
+        })
+    }
+}
+
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
+pub struct DomainRecordHeader {
+    pub root: Pubkey,
+
+    pub domains: Vec<u8>,
+}
+
+impl Sealed for DomainRecordHeader {}
+
+impl Pack for DomainRecordHeader {
+    //the length without the domain data
+    const LEN: usize = 64;
+
+    fn pack_into_slice(&self, dst: &mut [u8]) {
+        let mut slice = dst;
+        self.serialize(&mut slice).unwrap()
+    }
+
+    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
+        let mut p = src;
+        DomainRecordHeader::deserialize(&mut p).map_err(|_| {
             msg!("Failed to deserialize name record");
             ProgramError::InvalidAccountData
         })
@@ -67,15 +94,9 @@ pub mod fun{
     pub fn get_seeds_and_key(
         program_id: &Pubkey,
         hashed_name: Vec<u8>,
-        class: &Pubkey,
         root_opt: Option<&Pubkey>,
     ) -> (Pubkey, Vec<u8>) {        
         let mut seeds_vec: Vec<u8> = hashed_name;
-
-        //push class account
-        for b in class.to_bytes() {
-            seeds_vec.push(b);
-        }
 
         //root domain(when create a root domian,use default)
         let root_domian = root_opt.cloned().unwrap_or_default();
