@@ -5,81 +5,18 @@ use anchor_lang::solana_program::pubkey::Pubkey;
 use anchor_lang::solana_program::msg;
 
 
-
-
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
-pub struct NameRecordHeader{
-    //owner of this name
-    //should be the top domain
-    pub owner: Pubkey,
-    //define the data type
-    //root domain pubkey
-    pub root: Pubkey,
-
-    //ipfs cid?   
-    pub ipfs: Option<[u8; 46]>,
-    
-}
-//Prevent external code from implementing certain traits for NameRecordHeader
-impl Sealed for NameRecordHeader {}
-
-//Serialize and deserialize structures into byte arrays
-impl Pack for NameRecordHeader {
-    //pubkey:32 ipfs:
-    //32+32+46+1 = 111;
-    const LEN: usize = 111;
-
-    fn pack_into_slice(&self, dst: &mut [u8]) {
-        let mut slice = dst;
-        self.serialize(&mut slice).unwrap()
-    }
-
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-        let mut p = src;
-        NameRecordHeader::deserialize(&mut p).map_err(|_| {
-            msg!("Failed to deserialize name record");
-            ProgramError::InvalidAccountData
-        })
-    }
-}
-
-
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
-pub struct DomainRecordHeader {
-    pub root: Pubkey,
-
-    pub domains: Vec<u8>,
-}
-
-impl Sealed for DomainRecordHeader {}
-
-impl Pack for DomainRecordHeader {
-    //the length without the domain data
-    const LEN: usize = 64;
-
-    fn pack_into_slice(&self, dst: &mut [u8]) {
-        let mut slice = dst;
-        self.serialize(&mut slice).unwrap()
-    }
-
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-        let mut p = src;
-        DomainRecordHeader::deserialize(&mut p).map_err(|_| {
-            msg!("Failed to deserialize name record");
-            ProgramError::InvalidAccountData
-        })
-    }
-}
-
-
-
-
-pub mod fun{
+pub mod Utils{
     use anchor_lang::{prelude::*, solana_program::entrypoint::ProgramResult};
-    use crate::{update_data, web3_data};
+    use crate::{update_data, web3_data, RecordAccount};
     use anchor_lang::solana_program::hash::hashv;
+    use anchor_lang::solana_program::ed25519_program;
 
+
+    pub const NAME_LEN: usize = 32 + 32 + 1 + 46;
+    pub const RECORD_LEN: usize = 32 + 4 + 32;
+    pub const AUTION: Pubkey = pubkey!("DWNSuxCniY8m11DazRoN3VqvDZK8Sps2wgoQHWx3t4Sx");
     pub const HASH_PREFIX: &str = "WEB3 Name Service";
+    pub const REGISTER_ID: Pubkey = pubkey!("7MReDm6FiS3n4A1sxTxdHu8p92TQutQSws715azLqtYj");
 
     pub fn get_hashed_name(name: &str) -> Vec<u8> {
         hashv(&[(HASH_PREFIX.to_owned() + name).as_bytes()])
@@ -87,11 +24,7 @@ pub mod fun{
             .to_vec()
     }
 
-    //usage: calculate the PDA
-    //program_id: the id of current program
-    //hashed_name: off-chain, the hased value of domain
-    //if use root, means it's common domain,
-    pub fn get_seeds_and_key(
+    pub fn get_PDA_key(
         program_id: &Pubkey,
         hashed_name: Vec<u8>,
         root_opt: Option<&Pubkey>,
@@ -130,6 +63,37 @@ pub mod fun{
         }
         return true;
     }
+
+
+    pub fn create_record_data(name: String, root: Pubkey) -> Vec<u8> {
+        let mut name_vec = Vec::new();
+        name_vec.extend_from_slice(name.as_bytes());
+        name_vec.extend_from_slice(".".as_bytes());
+        
+        name_vec.extend(vec![0u8; 32 - name_vec.len()]);
+
+        let record = RecordAccount {
+            root: root,
+            domains: name_vec,
+        };
+
+        let mut data = Vec::new();
+        record.serialize(&mut data).unwrap();
+
+        data
+    }
+
+
+    pub fn if_over_size(now_len: usize, will_add_len: usize) -> bool {
+        let size = now_len % 32;
+        if (size + will_add_len + 1) > 32 {
+            true
+        }else {
+            false
+        }
+    }
+
+
 
         
 

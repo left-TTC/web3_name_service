@@ -1817,6 +1817,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "borsh 1.5.5",
+ "serde_json",
 ]
 
 [[package]]

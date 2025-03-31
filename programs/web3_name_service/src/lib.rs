@@ -1,7 +1,10 @@
 use anchor_lang::{accounts::{signer, unchecked_account}, prelude::*, solana_program::pubkey};
 use processor::Processor;
+use state::Utils::{get_hashed_name, AUTION, REGISTER_ID};
+use anchor_lang::solana_program::program_pack::{Pack, Sealed};
 
-declare_id!("F6PrVaeL2TegV2fmXFGW1dQeCXCCBZffn1JT5PUEiPMM");
+
+declare_id!("2zwHkEcbGRfzif4iCtpNgQntPgZDRhAukteiuDeAcjYU");
 
 pub mod processor;
 pub mod state;
@@ -31,54 +34,65 @@ pub mod web3_name_service {
         ) -> ProgramResult {
         Processor::transfer_process(ctx, transfer)
     }
-    //It doesn't seem necessary
+   
     pub fn delete(ctx: Context<delete_name_service>) -> ProgramResult {
         Processor::delete_process(ctx)
     }
 }
 
 #[derive(Accounts)]
-//this accounts info used to create root or domain
-//Hierarchical domain names are not considered for now
 pub struct create_name_service<'info>{
-    //the domain account that will be created
+    
     /// CHECK: This account is verified in the instruction logic to ensure its safety.
     #[account(mut)]
-    name_account: UncheckedAccount<'info>,
-    //the solana program account
-    system_account:Program<'info, System>,
-    //to pay the of the domain,need sign
+    pub name_account: UncheckedAccount<'info>,
+
+    /// CHECK: This account is verified in the instruction logic to ensure its safety.
     #[account(mut)]
+    pub record_account: UncheckedAccount<'info>,
+
+    //the solana program account
+    pub system_program: Program<'info, System>,
+    
+    //to pay the of the domain,need sign
+    
     payer: Signer<'info>,  
 
-    //parent domain: have -- common domain,  no -- create root domain
-    root_domain_opt: Option<UncheckedAccount<'info>>,
+    #[account( owner = AUTION )]
+    root_domain_opt: Option<Account<'info, NameAccount>>,
+
+    // #[account(
+    //     seeds = [b"authority"], 
+    //     bump,
+    //     seeds::program = &REGISTER_ID
+    // )]
+    // pda_signer: Signer<'info>,
 }
 
 #[account]
 pub struct base_data {
     pub lamports: u64,
-    pub hashed_name: Vec<u8>,
+    pub name: String,
     pub space: u32,
     pub owner: Pubkey,
-    pub ipfs: Option<Vec<u8>>,
+    pub ipfs: Option<[u8; 46]>,
 }
 
 
-#[derive(Accounts)]
-pub struct create_record_service<'info>{
-    //the domain account that will be created
-    /// CHECK: This account is verified in the instruction logic to ensure its safety.
-    #[account(mut)]
-    record_account: UncheckedAccount<'info>,
-    //the solana program account
-    system_account:Program<'info, System>,
-    //to pay the of the domain,need sign
-    payer: Signer<'info>,  
-
-    //parent domain: have -- common domain,  no -- create root domain
-    root_domain_opt: Option<UncheckedAccount<'info>>,
+#[account]
+pub struct NameAccount{
+    pub owner: Pubkey,
+    pub root: Pubkey,
+    pub ipfs: Option<[u8; 46]>,
 }
+
+
+#[account]
+pub struct RecordAccount {
+    pub root: Pubkey,
+    pub domains: Vec<u8>,
+}
+
 
 #[derive(Accounts)]
 //use to update storaged info
@@ -159,34 +173,109 @@ pub struct base_info{
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use anchor_lang::prelude::*;
-    use anchor_lang::solana_program::hash::hash;
-    use std::convert::TryInto;
+    use std::string;
 
-    // 计算指令的 Discriminator
-    fn get_discriminator(name: &str) -> [u8; 8] {
-        let sighash = hash(format!("global:{}", name).as_bytes());
-        sighash.to_bytes()[..8].try_into().unwrap()
-    }
+    use crate::state::Utils::{self, create_record_data};
+
+    use super::*;
+    use anchor_lang::solana_program::nonce::state::Data;
+    use anchor_lang::{prelude::*, Discriminator};
+    use anchor_lang::solana_program::hash::hash;
+    use anchor_lang::solana_program::pubkey;
 
     #[test]
-    fn test_all_discriminators() {
-        let create_domain_discriminator = get_discriminator("create_domain");
-        let update_domain_discriminator = get_discriminator("update_domain");
-        let transfer_domain_discriminator = get_discriminator("transfer_domain");
-        let delete_domain_discriminator = get_discriminator("delete_domain");
+    fn storage_domain_record_test() {
 
-        println!("Discriminators:");
-        println!("create_domain: {:?}", create_domain_discriminator);
-        println!("update_domain: {:?}", update_domain_discriminator);
-        println!("transfer_domain: {:?}", transfer_domain_discriminator);
-        println!("delete_domain: {:?}", delete_domain_discriminator);
+        println!("[1] create a record");
 
-        assert_eq!(create_domain_discriminator.len(), 8);
-        assert_eq!(update_domain_discriminator.len(), 8);
-        assert_eq!(transfer_domain_discriminator.len(), 8);
-        assert_eq!(delete_domain_discriminator.len(), 8);
+        let mut will_record_data = create_record_data(
+            String::from("aaa"), AUTION);
+
+        println!("Serialized data length: {}", will_record_data.len()); 
+        
+        let mut decoded = RecordAccount::try_from_slice(&will_record_data).unwrap();
+        println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains));
+
+        if !decoded.domains.is_empty() {
+            
+            let mut recorded_domains = decoded.domains;
+            let add = String::from("xyz");
+            let will_add_domain = add.as_bytes();
+
+            if let Some(pos) = recorded_domains.iter().rposition(|&c| c == b'.') {
+                recorded_domains.truncate(pos + 1);
+            }
+    
+            if recorded_domains.len() % 32 + 1 + will_add_domain.len() > 32 {
+                msg!("need add space");
+            }else {
+                recorded_domains.extend_from_slice(will_add_domain);
+                recorded_domains.extend_from_slice(".".as_bytes());
+                recorded_domains.extend(vec![0u8; 32 - recorded_domains.len()%32]);
+    
+                decoded.domains = recorded_domains;
+                let mut new_write = Vec::new();
+                decoded.serialize(&mut new_write).unwrap();
+
+                let mut decoded = RecordAccount::try_from_slice(&new_write).unwrap();
+                println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains));
+
+                if !decoded.domains.is_empty() {
+            
+                    let mut recorded_domains = decoded.domains;
+                    let add = String::from("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+                    let will_add_domain = add.as_bytes();
+        
+                    if let Some(pos) = recorded_domains.iter().rposition(|&c| c == b'.') {
+                        recorded_domains.truncate(pos + 1);
+                    }
+            
+                    if recorded_domains.len() % 32 + 1 + will_add_domain.len() > 32 {
+                        msg!("need add space");
+                    }else {
+                        recorded_domains.extend_from_slice(will_add_domain);
+                        recorded_domains.extend_from_slice(".".as_bytes());
+                        recorded_domains.extend(vec![0u8; 32 - recorded_domains.len()%32]);
+            
+                        decoded.domains = recorded_domains;
+                        let mut new_write = Vec::new();
+                        decoded.serialize(&mut new_write).unwrap();
+        
+                        let mut decoded = RecordAccount::try_from_slice(&new_write).unwrap();
+                        println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains))
+                    }
+                }
+            }
+        }
+        
+        
+        // // 6. 反序列化
+        // let decoded = RecordAccount::try_from_slice(&data);
+        // match decoded {
+        //     Ok(decoded) => {
+        //         println!("[6] Decoded successfully:");
+        //         println!("  - Root: {}", decoded.root);
+                
+        //         let decoded_str = String::from_utf8(decoded.domains.clone())
+        //             .expect("Invalid UTF-8 in domains");
+        //         println!("  - Domains: {}", decoded_str);
+                
+        //         // 7. 完整性验证
+        //         assert_eq!(decoded.root, AUTION, "Root mismatch");
+        //         assert_eq!(
+        //             decoded_str, "aaa.web",
+        //             "Domains content mismatch"
+        //         );
+        //         assert_eq!(
+        //             decoded.domains, domains_bytes,
+        //             "Domains binary mismatch"
+        //         );
+        //         println!("[7] All assertions passed!");
+        //     }
+        //     Err(e) => {
+        //         panic!("Deserialization failed: {}", e);
+        //     }
+        // }
     }
 }
 
