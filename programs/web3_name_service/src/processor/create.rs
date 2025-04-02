@@ -3,7 +3,7 @@ use anchor_lang::{prelude::*, Discriminator};
 use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use crate::{base_data, create_name_service, NameAccount, RecordAccount};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
-use crate::state::Utils::{self,create_record_data, get_PDA_key, get_hashed_name, if_over_size, AUTION};
+use crate::state::Utils::{self,create_record_data, get_PDA_key, get_hashed_name, AUTION};
 use anchor_lang::solana_program::program_pack::Pack;
 use anchor_lang::solana_program::{lamports, system_instruction};
 
@@ -55,7 +55,6 @@ pub fn create(
     );
 
     if *ctx.accounts.record_account.key != record_account_key {
-        #[cfg(feature = "Debug")]
         msg!("incoming domain name err");
         msg!("coming {}", ctx.accounts.record_account.key);
         msg!("need {}", record_account_key);
@@ -111,13 +110,21 @@ pub fn create(
 
         msg!("write name account record data");
 
+        let ipfs_will_write = if let Some(value) = init_data.ipfs{
+            value
+        }else{
+            [0; 46]
+        };
+
         let write_name_account_data = NameAccount{
             owner: init_data.owner,
             root: root,
-            ipfs: init_data.ipfs,
+            //Consider replacing it with a must
+            ipfs: Some(ipfs_will_write),
         };
 
         let mut data = Vec::new();
+        data.extend_from_slice(&NameAccount::DISCRIMINATOR);
         write_name_account_data.serialize(&mut data)?;  
 
         msg!("serialize success");
@@ -133,7 +140,8 @@ pub fn create(
     if check_if_init(&ctx.accounts.record_account) {
         let account_data = &mut ctx.accounts.record_account.try_borrow_mut_data()?;
 
-        let mut recorded_data = RecordAccount::try_from_slice(&account_data)?;
+        let over_dis_data = &account_data[8..];
+        let mut recorded_data = RecordAccount::try_from_slice(over_dis_data)?;
 
         let mut recorded_domains = recorded_data.domains;
         let will_add_domain = init_data.name.as_bytes();
@@ -156,7 +164,7 @@ pub fn create(
             let mut new_write = Vec::new();
             recorded_data.serialize(&mut new_write)?;
 
-            account_data[..new_write.len()].copy_from_slice(&new_write);
+            account_data[8..].copy_from_slice(&new_write);
         }
     }else {
         msg!("create domain fristly");

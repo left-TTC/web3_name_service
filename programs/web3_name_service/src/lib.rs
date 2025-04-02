@@ -4,7 +4,7 @@ use state::Utils::{get_hashed_name, AUTION, REGISTER_ID};
 use anchor_lang::solana_program::program_pack::{Pack, Sealed};
 
 
-declare_id!("2zwHkEcbGRfzif4iCtpNgQntPgZDRhAukteiuDeAcjYU");
+declare_id!("EWVnJDmu8CRLPyuHQqxgR1oFB8WhXBXRENRr1skQZxA9");
 
 pub mod processor;
 pub mod state;
@@ -24,8 +24,8 @@ pub mod web3_name_service {
 
     pub fn update (
         ctx: Context<update_name_service>,
-        data: update_data) -> ProgramResult {
-        Processor::update_process(ctx, data)
+        update_ipfs: [u8; 46]) -> ProgramResult {
+        Processor::update_process(ctx, update_ipfs)
     }
 
     pub fn transfer(
@@ -98,20 +98,22 @@ pub struct RecordAccount {
 //use to update storaged info
 pub struct update_name_service<'info> {
     //The domain name account to be modified
-    /// CHECK: This account is verified in the instruction logic to ensure its safety.
-    name_account: UncheckedAccount<'info>,
+    // #[account(mut,
+    //     constraint = name_account.key() != name_account.root
+    // )]
+    #[account(mut)]
+    name_account: Account<'info, NameAccount>,
     //updater
-    //should be the class account
+    #[account( address = name_account.owner )]
     name_update_signer: Signer<'info>,
-    //root domain accout
-    //Y - common account update the info
-    //N - top domain
-    root_domain: Option<Signer<'info>>,
+
+    // #[account( address = name_account.root )]
+    root_domain: Account<'info, NameAccount>,
 }
 
 #[account]
 pub struct update_data {
-    ipfs: Vec<u8>,
+    ipfs: [u8; 46],
 }
 
 #[derive(Accounts)]
@@ -184,98 +186,27 @@ mod test {
     use anchor_lang::solana_program::pubkey;
 
     #[test]
-    fn storage_domain_record_test() {
+    fn test1() {
+        let account_data = NameAccount{
+            owner: AUTION,
+            root: AUTION,
+            ipfs: Some([0; 46]),
+        };
 
-        println!("[1] create a record");
+        let mut data = Vec::new();
+        data.extend_from_slice(&NameAccount::DISCRIMINATOR);
+        account_data.serialize(&mut data).unwrap(); 
 
-        let mut will_record_data = create_record_data(
-            String::from("aaa"), AUTION);
+        let check_data = &data[8..];
+        let des_data = NameAccount::try_from_slice(check_data).unwrap();
 
-        println!("Serialized data length: {}", will_record_data.len()); 
-        
-        let mut decoded = RecordAccount::try_from_slice(&will_record_data).unwrap();
-        println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains));
+        println!("owner:{}",des_data.owner);
+        println!("this test means we should skip the frist eight bytes");
+    }
 
-        if !decoded.domains.is_empty() {
-            
-            let mut recorded_domains = decoded.domains;
-            let add = String::from("xyz");
-            let will_add_domain = add.as_bytes();
+    #[test]
+    fn test2() {
 
-            if let Some(pos) = recorded_domains.iter().rposition(|&c| c == b'.') {
-                recorded_domains.truncate(pos + 1);
-            }
-    
-            if recorded_domains.len() % 32 + 1 + will_add_domain.len() > 32 {
-                msg!("need add space");
-            }else {
-                recorded_domains.extend_from_slice(will_add_domain);
-                recorded_domains.extend_from_slice(".".as_bytes());
-                recorded_domains.extend(vec![0u8; 32 - recorded_domains.len()%32]);
-    
-                decoded.domains = recorded_domains;
-                let mut new_write = Vec::new();
-                decoded.serialize(&mut new_write).unwrap();
-
-                let mut decoded = RecordAccount::try_from_slice(&new_write).unwrap();
-                println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains));
-
-                if !decoded.domains.is_empty() {
-            
-                    let mut recorded_domains = decoded.domains;
-                    let add = String::from("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-                    let will_add_domain = add.as_bytes();
-        
-                    if let Some(pos) = recorded_domains.iter().rposition(|&c| c == b'.') {
-                        recorded_domains.truncate(pos + 1);
-                    }
-            
-                    if recorded_domains.len() % 32 + 1 + will_add_domain.len() > 32 {
-                        msg!("need add space");
-                    }else {
-                        recorded_domains.extend_from_slice(will_add_domain);
-                        recorded_domains.extend_from_slice(".".as_bytes());
-                        recorded_domains.extend(vec![0u8; 32 - recorded_domains.len()%32]);
-            
-                        decoded.domains = recorded_domains;
-                        let mut new_write = Vec::new();
-                        decoded.serialize(&mut new_write).unwrap();
-        
-                        let mut decoded = RecordAccount::try_from_slice(&new_write).unwrap();
-                        println!("deserialized domains: {}", String::from_utf8_lossy(&decoded.domains))
-                    }
-                }
-            }
-        }
-        
-        
-        // // 6. 反序列化
-        // let decoded = RecordAccount::try_from_slice(&data);
-        // match decoded {
-        //     Ok(decoded) => {
-        //         println!("[6] Decoded successfully:");
-        //         println!("  - Root: {}", decoded.root);
-                
-        //         let decoded_str = String::from_utf8(decoded.domains.clone())
-        //             .expect("Invalid UTF-8 in domains");
-        //         println!("  - Domains: {}", decoded_str);
-                
-        //         // 7. 完整性验证
-        //         assert_eq!(decoded.root, AUTION, "Root mismatch");
-        //         assert_eq!(
-        //             decoded_str, "aaa.web",
-        //             "Domains content mismatch"
-        //         );
-        //         assert_eq!(
-        //             decoded.domains, domains_bytes,
-        //             "Domains binary mismatch"
-        //         );
-        //         println!("[7] All assertions passed!");
-        //     }
-        //     Err(e) => {
-        //         panic!("Deserialization failed: {}", e);
-        //     }
-        // }
     }
 }
 

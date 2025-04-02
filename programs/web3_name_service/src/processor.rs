@@ -4,12 +4,10 @@ use anchor_lang::solana_program::entrypoint::ProgramResult;
 
 pub mod create;
 pub mod delete;
-pub mod update;
 pub mod transfer;
 
 
 use create::create;
-use update::update;
 use transfer::transfer;
 use delete::delete;
 
@@ -26,10 +24,19 @@ impl Processor {
 
     pub fn update_process(
         ctx: Context<update_name_service>,
-        data: update_data) -> ProgramResult{
-        #[cfg(feature = "Debug")]
+        update_ipfs: [u8; 46]) -> ProgramResult{
+
         msg!("start update domain data");
-        update(ctx, data)
+
+        match std::str::from_utf8(&update_ipfs) {
+            Ok(ipfs_str) => msg!("Updating IPFS: {}", ipfs_str),
+            Err(_) => msg!("Error: IPFS data is not valid UTF-8"),
+        };
+
+        let name_account = &mut ctx.accounts.name_account;
+        name_account.ipfs = Some(update_ipfs);
+
+        Ok(())
     }
 
     pub fn transfer_process(
