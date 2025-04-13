@@ -946,6 +946,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "left_utils"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28104686e3532f897d73f3f52b235ba0d252b6aaac008ebd03a8e97741752a39"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.170"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1816,8 +1825,7 @@ name = "web3nameservice"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "borsh 1.5.5",
- "serde_json",
+ "left_utils",
 ]
 
 [[package]]

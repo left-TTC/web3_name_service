@@ -8,7 +8,48 @@ import { Buffer } from "buffer";
 import testClassKeyPair from "/home/f/wallet/test2.json";
 import testPayerKeypair from "/home/f/wallet/test1.json";
 import { publicKey } from "@coral-xyz/anchor/dist/cjs/utils";
+import { seed } from "@coral-xyz/anchor/dist/cjs/idl";
 
+
+const HASH_PREFIX = "WEB3 Name Service";
+
+export function getHashedName(name: string){
+  const rawHash = HASH_PREFIX + name;
+  const hashValue = sha256(rawHash);
+  return new Uint8Array(Buffer.from(hashValue, 'hex'));
+}
+
+export function getSeedAndKey(
+  programid: PublicKey, hashedName: Uint8Array, rootOpt: null | PublicKey ){
+  
+  let seeds = new Uint8Array([...hashedName]);
+  
+  const rootDomain = rootOpt || PublicKey.default;
+  seeds = new Uint8Array([...seeds, ...rootDomain.toBytes()]);
+
+  const seedChunks = [];
+  for (let i = 0; i < seeds.length; i += 32) {
+      const chunk = seeds.slice(i, i + 32);
+      seedChunks.push(chunk);
+  }
+
+  const [nameAccountKey, bump] = PublicKey.findProgramAddressSync(
+      seedChunks,
+      programid
+  );
+
+  seeds = new Uint8Array([...seeds, bump]);
+
+  return {nameAccountKey, seedChunks};
+}
+
+interface BaseData {
+  name: string;
+  root: PublicKey;
+  hasedName: Buffer; // 注意拼写是 hasedName 不是 hashedName
+  ipfs: number[] | null;
+  owner: PublicKey;
+}
 
 describe("web3_name_services", () => {
   // Configure the client to use the local cluster.
@@ -22,87 +63,46 @@ describe("web3_name_services", () => {
   const payer = Keypair.fromSecretKey(payerSecretKey);;
 
   //get name account key
-  const root_name = "aaa"
+  
+  const root_name = "aaaa"
 
-  const {nameAccountKey} = getSeedAndKey(
-    program.programId, getHashedName(root_name), null
-  )
+  const {nameAccountKey: nameAccountPDA, seedChunks: seed} = getSeedAndKey(
+    program.programId, getHashedName(root_name), null)
 
-  const ownerStr = payer.publicKey.toBase58();
-  const {nameAccountKey: nameRecordAccount} = getSeedAndKey(
-    program.programId, getHashedName(ownerStr), null
-  )
+  console.log("create:", nameAccountPDA.toBase58())
 
-  const ipfsHash = "QmPu4ZT2zPfyVY8CA2YBzqo9HfAV79nDuuf177tMrQK1py";
-  console.log("ipfs length:", ipfsHash.length);
-  const ipfsBytes = Buffer.from(ipfsHash, 'utf-8');
-
-  const hashed_name = getHashedName(root_name);
-  console.log("hashed_name:", hashed_name.length);
-  const hashed_owner = getHashedName(payer.publicKey.toBase58());
-  console.log("hashed_owner:", hashed_owner.length);
-
-  const lamports = new BN(10000000);
-  const space = 0; 
+  console.log(Buffer.concat(seed).length)
 
   const owner = payer.publicKey;
-  const baseData = {
+  const baseData: BaseData = {
         name: root_name,
-        owner: owner,
-        lamports: lamports,
-        space: space,
-        ipfs: ipfsBytes,
+        root: PublicKey.default,
+        hasedName: Buffer.from(getHashedName(root_name)),
+        ipfs: null,
+        owner: payer.publicKey,
     };
   
   it("this is create root domain test", async () => {
-    //GLy1fKq1R2CmCCGBdXMARo9X7Y4dH8fVPECVXKP5hN5Y
-    console.log("calculate:", nameAccountKey.toBase58());
-    //39ZheXmgAQQ19RqyA7xrwZEFPhw3xYqRe4geDWPNziDi
-    console.log("record:", nameRecordAccount.toBase58())
-    //AoA4LgBAYszA1Ku6QbVwPkUzu1bu324SonNcJuGg1DNY
-    const tx = await program.methods
-      .create(baseData)
-      .accounts({
-        nameAccount: nameAccountKey,
-        recordAccount: nameRecordAccount,
-        payer: payer.publicKey,
-        rootDomainOpt: null,
-      })
-      .signers([payer])
-      .rpc();
-
+        try{
+          const tx = await program.methods
+            .create(baseData)
+            .accounts({
+              nameAccount: nameAccountPDA,
+              rootDomainOpt: null,
+              payer: payer.publicKey
+            })
+            .signers([payer])
+            .rpc();
+          console.log('Transaction successful:', tx);
+        } catch (err) {
+            console.error('Error creating name:', err);
+        }
   });
 
 });
 
 
 
-export const WEB3_NAME_SERVICE_ID = new PublicKey("62u16JAgRauejvCwT728NrnNtJBYSgR4zVc5rkZCYNnd");
 
 
-function getHashedName(name: string){
-  const HASH_PREFIX = "WEB3 Name Service";
-  const rawHash = HASH_PREFIX + name;
-  const hashValue = sha256(rawHash);
-  return new Uint8Array(Buffer.from(hashValue, 'hex'));
-}
-
-function getSeedAndKey(
-  programid: PublicKey,
-  hashedName: Uint8Array, // 32 字节
-  rootOpt: null | PublicKey
-) {
-
-  const seeds = [
-    hashedName, 
-    (rootOpt || PublicKey.default).toBytes(), 
-  ];
-
-  const [nameAccountKey, bump] = PublicKey.findProgramAddressSync(
-    seeds, // 直接传入 [Uint8Array, Uint8Array]
-    programid
-  );
-
-  return { nameAccountKey, seeds: [...hashedName, ...(rootOpt?.toBytes() || PublicKey.default.toBytes()), bump] };
-}
 

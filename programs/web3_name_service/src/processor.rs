@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{base_data, create_name_service, delete_name_service, transfer_info, transfer_name_service, update_data, update_name_service};
+use crate::{BaseData, CreateNameService, delete_name_service, transfer_info, transfer_name_service, update_data, update_name_service};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 
 pub mod create;
@@ -15,8 +15,8 @@ pub struct Processor{}
 
 impl Processor {
     pub fn create_process(
-        ctx: Context<create_name_service>,
-        data: base_data) -> ProgramResult{
+        ctx: Context<CreateNameService>,
+        data: BaseData) -> ProgramResult{
         #[cfg(feature = "Debug")]
         msg!("start create a domian name");
         create(ctx, data)

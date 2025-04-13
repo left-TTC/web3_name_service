@@ -1,10 +1,10 @@
 use anchor_lang::{accounts::{signer, unchecked_account}, prelude::*, solana_program::pubkey};
 use processor::Processor;
-use state::Utils::{get_hashed_name, AUTION, REGISTER_ID};
+use state::utils::{self, AUTION, REGISTER_ID};
 use anchor_lang::solana_program::program_pack::{Pack, Sealed};
 
 
-declare_id!("EWVnJDmu8CRLPyuHQqxgR1oFB8WhXBXRENRr1skQZxA9");
+declare_id!("9WykwriEQGT1RjzJvAa7a31AQ8ZtHGnvmXRaeQ47oQLk");
 
 pub mod processor;
 pub mod state;
@@ -16,8 +16,8 @@ pub mod web3_name_service {
     use super::*;
 
     pub fn create (
-        ctx: Context<create_name_service>,
-        data: base_data
+        ctx: Context<CreateNameService>,
+        data: BaseData
         ) -> ProgramResult {
         Processor::create_process(ctx, data)
     }
@@ -41,25 +41,41 @@ pub mod web3_name_service {
 }
 
 #[derive(Accounts)]
-pub struct create_name_service<'info>{
-    
-    /// CHECK: This account is verified in the instruction logic to ensure its safety.
-    #[account(mut)]
-    pub name_account: UncheckedAccount<'info>,
-
-    /// CHECK: This account is verified in the instruction logic to ensure its safety.
-    #[account(mut)]
-    pub record_account: UncheckedAccount<'info>,
+#[instruction(data: BaseData)]
+pub struct CreateNameService<'info>{
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + 32 + 32 + 1 + 46,
+        seeds = [
+            &data.hased_name,
+            data.root.to_bytes().as_ref(),
+        ],
+        bump
+    )]
+    pub name_account: Account<'info, NameAccount>,
+  
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + 32 + 4 + 32,
+        seeds = [
+            b"Record",
+            data.owner.to_bytes().as_ref(),
+        ],
+        bump
+    )]
+    pub record_account: Account<'info, RecordAccount>,
 
     //the solana program account
     pub system_program: Program<'info, System>,
     
     //to pay the of the domain,need sign
-    
-    payer: Signer<'info>,  
+    #[account(mut)] 
+    pub payer: Signer<'info>,  
 
     #[account( owner = AUTION )]
-    root_domain_opt: Option<Account<'info, NameAccount>>,
+    pub root_domain_opt: Option<Account<'info, NameAccount>>,
 
     // #[account(
     //     seeds = [b"authority"], 
@@ -70,14 +86,13 @@ pub struct create_name_service<'info>{
 }
 
 #[account]
-pub struct base_data {
-    pub lamports: u64,
+pub struct BaseData {
     pub name: String,
-    pub space: u32,
+    pub root: Pubkey,
     pub owner: Pubkey,
+    pub hased_name: Vec<u8>,
     pub ipfs: Option<[u8; 46]>,
 }
-
 
 #[account]
 pub struct NameAccount{
@@ -85,7 +100,6 @@ pub struct NameAccount{
     pub root: Pubkey,
     pub ipfs: Option<[u8; 46]>,
 }
-
 
 #[account]
 pub struct RecordAccount {
@@ -102,13 +116,13 @@ pub struct update_name_service<'info> {
     //     constraint = name_account.key() != name_account.root
     // )]
     #[account(mut)]
-    name_account: Account<'info, NameAccount>,
+    pub name_account: Account<'info, NameAccount>,
     //updater
     #[account( address = name_account.owner )]
-    name_update_signer: Signer<'info>,
+    pub name_update_signer: Signer<'info>,
 
     // #[account( address = name_account.root )]
-    root_domain: Account<'info, NameAccount>,
+    pub root_domain: Account<'info, NameAccount>,
 }
 
 #[account]
@@ -177,7 +191,7 @@ pub struct base_info{
 mod test {
     use std::string;
 
-    use crate::state::Utils::{self, create_record_data};
+    use crate::state::utils::{self, create_record_data};
 
     use super::*;
     use anchor_lang::solana_program::nonce::state::Data;

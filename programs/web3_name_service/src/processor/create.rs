@@ -1,246 +1,88 @@
-
-use anchor_lang::{prelude::*, Discriminator};
-use anchor_lang::solana_program::program::{invoke, invoke_signed};
-use crate::{base_data, create_name_service, NameAccount, RecordAccount};
+use anchor_lang::prelude::*;
+use crate::{BaseData, CreateNameService};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
-use crate::state::Utils::{self,create_record_data, get_PDA_key, get_hashed_name, AUTION};
-use anchor_lang::solana_program::program_pack::Pack;
-use anchor_lang::solana_program::{lamports, system_instruction};
+use crate::state::utils::AUTION;
+use left_utils::get_hashed_name;
 
 
 pub fn create(
-    ctx: Context<create_name_service>,
-    init_data: base_data
+    ctx: Context<CreateNameService>,
+    init_data: BaseData
     ) -> ProgramResult {
-    //domain type flag
-    let mut is_common_domain = true;
-    
-    let root_domain_key = if let Some(value) = &ctx.accounts.root_domain_opt {
-        msg!("root: {}", value.key());
-        msg!("payer: {}", ctx.accounts.payer.key);
-        if value.key() == *ctx.accounts.payer.key
-            || value.key() == Pubkey::default() {
-            is_common_domain = false;
-            None
-        }else{
-            Some(value.key())
-        }
-    }else{
-        msg!("root is none, ok");
-        is_common_domain = false;
-        None
-    };
-
-    //manually check name account key
-    let (name_account_key, name_seeds) = get_PDA_key(
-        ctx.program_id,
-        get_hashed_name(&init_data.name),
-        root_domain_key.as_ref(),
-    );
-
-    if *ctx.accounts.name_account.key != name_account_key {
-        #[cfg(feature = "Debug")]
-        msg!("incoming domain name err");
-        msg!("coming {}", ctx.accounts.name_account.key);
-        msg!("need {}", name_account_key);
-        return Err(ProgramError::InvalidArgument);
-    };
-    msg!("name account key ok");
-
-    //manually check record account key
-    let (record_account_key, record_seeds) = get_PDA_key(
-        ctx.program_id,
-        get_hashed_name(&init_data.owner.to_string()),
-        root_domain_key.as_ref(),
-    );
-
-    if *ctx.accounts.record_account.key != record_account_key {
-        msg!("incoming domain name err");
-        msg!("coming {}", ctx.accounts.record_account.key);
-        msg!("need {}", record_account_key);
-        return Err(ProgramError::InvalidArgument);
-    };
-    msg!("record account key ok");
-
-    //try to get onchain data
-    if check_if_init(&ctx.accounts.name_account) {
-        msg!("name account has inited");
-        return Err(ProgramError::InvalidArgument);
-    }
-    msg!("name account ok");
-
-    //create a mut root: used to construct NameRecordHeader 
-    let mut root;
-    if is_common_domain{
-        msg!("process to create a common domain");
-        if let Some(root_domain_account) = &ctx.accounts.root_domain_opt {
-            msg!("reading the data in root domain");
-            if root_domain_account.owner != AUTION {
-                msg!("the given root domain's record owner should be AUTION key");
-                return Err(ProgramError::InvalidArgument);
-            }
-
-            root = record_account_key.key().clone();
-        }else{
-            msg!("no root domain");
+        
+    let record_root= if let Some(value) = &ctx.accounts.root_domain_opt {
+        msg!("root is {}, this is a common domain", value.key());
+        if value.owner != AUTION {
+            msg!("the given root domain's record owner should be AUTION key");
             return Err(ProgramError::InvalidArgument);
         }
-    }else {
-        msg!("process to create root domain");
-        root = *ctx.accounts.name_account.key;
-
-        if init_data.owner != AUTION {
+        value.key()
+    }else{
+        msg!("root is none, this is a root domain");
+        if init_data.owner != AUTION
+            || init_data.root != Pubkey::default()
+                || init_data.owner == Pubkey::default(){
             msg!("creater is't the AUCTION program");
             return Err(ProgramError::InvalidArgument);
         }
-    }
-    msg!("root value ok");
-
-    if init_data.owner == Pubkey::default() {
-        #[cfg(feature = "Debug")]
-        msg!("The owner cannot be `Pubkey::default()`.");
-        return Err(ProgramError::InvalidArgument);
-    }
-    msg!("owner ok");
-
-    //create name account and write data in
-    {
-        invoke_to_create(
-            &ctx, name_seeds, false, init_data.lamports)?;
-
-        msg!("write name account record data");
-
-        let ipfs_will_write = if let Some(value) = init_data.ipfs{
-            value
-        }else{
-            [0; 46]
-        };
-
-        let write_name_account_data = NameAccount{
-            owner: init_data.owner,
-            root: root,
-            //Consider replacing it with a must
-            ipfs: Some(ipfs_will_write),
-        };
-
-        let mut data = Vec::new();
-        data.extend_from_slice(&NameAccount::DISCRIMINATOR);
-        write_name_account_data.serialize(&mut data)?;  
-
-        msg!("serialize success");
-        msg!("name data length: {}", data.len());
-
-        ctx.accounts.name_account
-            .try_borrow_mut_data()?
-            .copy_from_slice(&data);
-
-        msg!("create name account over");
-    }
-
-    if check_if_init(&ctx.accounts.record_account) {
-        let account_data = &mut ctx.accounts.record_account.try_borrow_mut_data()?;
-
-        let over_dis_data = &account_data[8..];
-        let mut recorded_data = RecordAccount::try_from_slice(over_dis_data)?;
-
-        let mut recorded_domains = recorded_data.domains;
-        let will_add_domain = init_data.name.as_bytes();
-
-        if let Some(pos) = recorded_domains.iter().rposition(|&c| c == b'.') {
-            recorded_domains.truncate(pos + 1);
-        }else {
-            return Err(ProgramError::InvalidArgument);
-        }
-
-        if recorded_domains.len() % 32 + 1 + will_add_domain.len() > 32 {
-            msg!("need add space");
-            return Err(ProgramError::InvalidArgument);
-        }else {
-            recorded_domains.extend_from_slice(will_add_domain);
-            recorded_domains.extend_from_slice(".".as_bytes());
-            recorded_domains.extend(vec![0u8; 32 - recorded_domains.len()%32]);
-
-            recorded_data.domains = recorded_domains;
-            let mut new_write = Vec::new();
-            recorded_data.serialize(&mut new_write)?;
-
-            account_data[8..].copy_from_slice(&new_write);
-        }
-    }else {
-        msg!("create domain fristly");
-        //transfer
-        invoke_to_create(
-            &ctx, record_seeds, true, init_data.lamports)?;
-
-        if init_data.name.as_bytes().len() <= 32{
-            let init_account_data = create_record_data(init_data.name, root);
-            msg!("data's length: {}", init_account_data.len());
-            ctx.accounts.record_account
-                .try_borrow_mut_data()?
-                .copy_from_slice(&init_account_data);
-        }else {
-            return Err(ProgramError::InvalidArgument);   
-        }
-    }
-
-    msg!("no problem here");
-    Ok(())
-}
-
-
-
-fn invoke_to_create(
-    ctx: &Context<create_name_service>,
-    seed: Vec<u8>,
-    if_create_record: bool,
-    calculated_lamports: u64
-) -> ProgramResult {
-    let (create_account, space) = if if_create_record {
-        (&ctx.accounts.record_account, Utils::RECORD_LEN)
-    } else{
-        (&ctx.accounts.name_account, Utils::NAME_LEN)
+        init_data.root
     };
 
-    //transfer
-    msg!("transfer");
-    invoke(
-        &system_instruction::transfer(
-            ctx.accounts.payer.key, 
-            create_account.key, 
-            calculated_lamports),
-        &[
-            ctx.accounts.payer.to_account_info().clone(),
-            create_account.to_account_info().clone(),
-            ctx.accounts.system_program.to_account_info().clone(),
-            ],
-    )?;
-    //Apply for a space and pay the fee
-    msg!("space");
-    invoke_signed(
-        &system_instruction::allocate(
-            create_account.key,
-            space as u64,
-        ),
-        &[create_account.to_account_info().clone(), ctx.accounts.system_program.to_account_info().clone()],
-        &[&seed.chunks(32).collect::<Vec<&[u8]>>()],
-    )?;
-    //assign the program ownership
-    invoke_signed(
-        &system_instruction::assign(create_account.key, ctx.program_id),
-        &[create_account.to_account_info().clone(), ctx.accounts.system_program.to_account_info().clone()],
-        &[&seed.chunks(32).collect::<Vec<&[u8]>>()],
-    )?;
+    msg!("[2] check root domain ok");
+
+    let cal_hash = get_hashed_name(&init_data.name);
+
+    if cal_hash != init_data.hased_name {
+        msg!("provided wrong info");
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    //create name account and write data in
+    msg!("write name account record data");
+    let name_account = &mut ctx.accounts.name_account;
+
+    name_account.owner = init_data.owner;
+    name_account.ipfs = init_data.ipfs;
+    name_account.root = record_root;
+
+    msg!("[3] create name account over");
+
+    let name_record = &mut ctx.accounts.record_account;
+    msg!("now record root is {}", name_record.root);
+    if name_record.root == Pubkey::default() {
+        //there are three confitions: common init or root init or root add 
+        msg!("this is a new common usr or root domain");
+        //if the common usr init, write in root PDA
+        //if root domian, it will update to Pubkey::default or write in pubkey::default
+        //every situation is feasible
+        name_record.root = record_root;
+
+        check_and_add(&mut name_record.domains, init_data.name)?;  
+    }else{
+        if name_record.root != record_root{
+            msg!("wrong provided record account");
+            return Err(ProgramError::InvalidArgument);
+        }
+
+        check_and_add(&mut name_record.domains, init_data.name)?;   
+    }
+    msg!("[4] create or add record account ok");
 
     Ok(())
 }
 
-fn check_if_init (account: &UncheckedAccount) -> bool {
-    let account_data = account.try_borrow_data().unwrap();
 
-    if account_data.len() > 0 {
-        true
+fn check_and_add (record_domains: &mut Vec<u8>, add_name: String) -> ProgramResult{
+    let length = record_domains.len();
+    let add_name_bytes = add_name.as_bytes();
+    if (length % 32 + add_name_bytes.len() + 1) > 32 {
+        msg!("Need to reallocate space");
+
     }else {
-        false
+        record_domains.extend_from_slice(add_name_bytes);
+        record_domains.extend_from_slice(".".as_bytes());
     }
+
+    Ok(())
 }
 
