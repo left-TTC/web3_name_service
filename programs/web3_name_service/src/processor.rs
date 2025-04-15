@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{BaseData, CreateNameService, delete_name_service, transfer_info, transfer_name_service, update_data, update_name_service};
+use crate::{BaseData, CreateNameService, delete_name_service, transfer_info, transfer_name_service, update_data, UpdateNameService};
 use anchor_lang::solana_program::entrypoint::ProgramResult;
 
 pub mod create;
@@ -23,7 +23,7 @@ impl Processor {
     }
 
     pub fn update_process(
-        ctx: Context<update_name_service>,
+        ctx: Context<UpdateNameService>,
         update_ipfs: [u8; 46]) -> ProgramResult{
 
         msg!("start update domain data");

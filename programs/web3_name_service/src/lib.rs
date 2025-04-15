@@ -4,7 +4,7 @@ use state::utils::{self, AUTION, REGISTER_ID};
 use anchor_lang::solana_program::program_pack::{Pack, Sealed};
 
 
-declare_id!("9WykwriEQGT1RjzJvAa7a31AQ8ZtHGnvmXRaeQ47oQLk");
+declare_id!("7jCvwtaAUda4SMYh24uuAS8nCYxDaKv5EuaP3qvXJYPs");
 
 pub mod processor;
 pub mod state;
@@ -23,7 +23,7 @@ pub mod web3_name_service {
     }
 
     pub fn update (
-        ctx: Context<update_name_service>,
+        ctx: Context<UpdateNameService>,
         update_ipfs: [u8; 46]) -> ProgramResult {
         Processor::update_process(ctx, update_ipfs)
     }
@@ -60,8 +60,8 @@ pub struct CreateNameService<'info>{
         payer = payer,
         space = 8 + 32 + 4 + 32,
         seeds = [
-            b"Record",
             data.owner.to_bytes().as_ref(),
+            data.root.to_bytes().as_ref(),
         ],
         bump
     )]
@@ -110,7 +110,7 @@ pub struct RecordAccount {
 
 #[derive(Accounts)]
 //use to update storaged info
-pub struct update_name_service<'info> {
+pub struct UpdateNameService<'info> {
     //The domain name account to be modified
     // #[account(mut,
     //     constraint = name_account.key() != name_account.root

@@ -14,7 +14,7 @@ counter = "9WykwriEQGT1RjzJvAa7a31AQ8ZtHGnvmXRaeQ47oQLk"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "https://api.devnet.solana.com "
+cluster = "https://api.devnet.solana.com"
 wallet = "~/wallet/test1.json"
 
 [scripts]

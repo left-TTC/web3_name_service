@@ -20,9 +20,9 @@ pub fn create(
     }else{
         msg!("root is none, this is a root domain");
         if init_data.owner != AUTION
-            || init_data.root != Pubkey::default()
-                || init_data.owner == Pubkey::default(){
+            || init_data.root != Pubkey::default(){
             msg!("creater is't the AUCTION program");
+            msg!("owner is {}", init_data.owner);
             return Err(ProgramError::InvalidArgument);
         }
         init_data.root
@@ -34,6 +34,11 @@ pub fn create(
 
     if cal_hash != init_data.hased_name {
         msg!("provided wrong info");
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    if init_data.owner == Pubkey::default(){
+        msg!("owner should not be the default");
         return Err(ProgramError::InvalidArgument);
     }
 

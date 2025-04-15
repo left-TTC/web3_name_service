@@ -6,7 +6,7 @@ pub mod utils{
     use anchor_lang::prelude::*;
     use crate::RecordAccount;
 
-    pub const AUTION: Pubkey = pubkey!("4FvqywYKRiv1uhah5Y1s39PZqoX7qLVjMiyUhguSwbvv"); 
+    pub const AUTION: Pubkey = pubkey!("9avSzeSypv1UnYMJX5Rjp9NrCJGCqxhPwPtaG9mpvcyz"); 
     pub const REGISTER_ID: Pubkey = pubkey!("7MReDm6FiS3n4A1sxTxdHu8p92TQutQSws715azLqtYj");
 
 
